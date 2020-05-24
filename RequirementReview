@@ -81,7 +81,7 @@ var mylib = {};
 					for (let i = 0; i < attributes.length; i++) {
 						attributes[i] = attributes[i].trim();
 					}
-					 var hasAttributePromis=new Promise((resolve, reject) => {
+					 var hasAttributePromise=new Promise((resolve, reject) => {
 						RM.Data.getAttributes(artifact.ref, attributes, function (result) {
 							var issuesFlag = false;
 							if (result.code !== RM.OperationResult.OPERATION_OK) {
