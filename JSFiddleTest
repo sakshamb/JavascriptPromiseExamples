@@ -1,0 +1,103 @@
+var promises = [];
+var RuleEngine = {
+  "RuleConfigurations": [{
+    "Rule": {
+      "Name": "Mandatory Attribute",
+      "Expression": "One pf the mandatory attribute for Artifact type not captured",
+      "Type": "has_Attribute",
+      "ArtifactType": "Customer Requirement",
+      "MandatoryAttributes": "ASIL,Verif Criteria"
+    }
+  }, {
+    "Rule": {
+      "Name": "Blacklisted words",
+      "Expression": "The following words should not be a part of the requirements",
+      "ArtifactType": "Customer Requirement",
+      "Blacklist": "should",
+      "Type": "contains"
+    }
+  }]
+};
+
+var hasAttributePromise = function(rule, attributes) {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      console.log(rule);
+      resolve(true);
+    }, 5000)
+  });
+};
+
+var has_Attribute = function(rule) {
+  var attributes = rule.Rule.MandatoryAttributes.split(',');
+  for (let i = 0; i < attributes.length; i++) {
+    attributes[i] = attributes[i].trim();
+  }
+  promises.push(hasAttributePromise(rule, attributes));
+}
+
+var ruleTest = function() {
+  RuleEngine.RuleConfigurations.forEach((rule) => {
+    switch (rule.Rule.Type) {
+      case "has_Attribute":
+        has_Attribute(rule);
+        break;
+      case "contains":
+        contains(rule);
+        break;
+    }
+  });
+
+  Promise.all(promises)
+    .then(values => {
+      console.log(values);
+      //	console.log(main.contentList)
+      if (values[0] || values[1]) {
+        console.log("here")
+        //main.updatedLength++;
+      }
+      //	main.loading = false;
+      //	main.displayInfo = true;
+      //	main.showInfo = true;
+      //issuesFlag=false;
+    })
+    .catch(error => {
+      console.log(error);
+    })
+    .finally(() => {
+      console.log("coming in finally");
+    });
+};
+
+
+for (let i = 0; i < 2; i++) {
+  ruleTest();
+}
+
+
+
+
+
+function containsPromise(rule, blackListWords, whiteListWords) {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve(false);
+    }, 2000)
+  })
+}
+
+function contains(rule) {
+  console.log("contains :: /n" + rule);
+  var blacklist = rule.Rule.Blacklist;
+  var whitelist = rule.Rule.Whitelist;
+  var blackListWords;
+  var whiteListWords;
+  if (blacklist) {
+    blackListWords = blacklist.split(',');
+  }
+  if (whitelist) {
+    whiteListWords = whitelist.split(',');
+  }
+
+  promises.push(containsPromise(rule, blackListWords, whiteListWords))
+}
