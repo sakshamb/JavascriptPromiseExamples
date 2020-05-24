@@ -1,0 +1,64 @@
+
+  /*"
+  Sample rule
+  Rule": {
+          "Name": "Give a name",
+          "Expression": "**the expression would be displayed when the given rule is voilated",
+          "Type": "has_Attribute/contains", has_attribute is to check if the value of an attribute of a specific artifact type is filled or not, contains can check whitelist or blacklist words based on an artifact type.
+          "ArtifactType": "Enter the required artifact type", mandatory for all rules
+          "MandatoryAttributes":"", required when Type is has_attribute mentions the attributes to check, please remove any trailing or leading spaces in the attribute name in project properties and save that then copy the name here.
+          "Blacklist":"blacklisted words", required when Type is contains, all the words which shall not be a part of the requirement text shall be checked from this. currently only the primary text is checked for these.
+          "Whitelist": "Whitelisted words" required when Type is contains, all the mandatory words in a requirement can be checked from this.
+        }
+      }, */
+      // Deviation deatils must be filled only if staus== deviation, put conditions R2
+      // Check for links
+      // check for enumaration values
+  var RuleEngine={
+    "RuleConfigurations": [
+      {
+        "Rule": {
+          "Name": "Mandatory Attribute",
+          "Expression": "One pf the mandatory attribute for Artifact type not captured",
+          "Type": "has_Attribute",
+          "ArtifactType": "Customer Requirement",
+          "MandatoryAttributes":"ASIL,Verif Criteria"
+        }
+      },
+      /*{
+        "Rule": {
+          "Name": "Mandatory Attribute",
+          "Expression": "Mandatory Attribute not found",
+          "Type": "has_Attribute",
+          "ArtifactType": "Software Requirement",
+          "MandatoryAttributes":"ASIL,Category,Name,Priority,Satisfies,Status,SW Functional Block Assign,Test Step,Verif Criteria"
+        }
+      },
+      {
+        "Rule": {
+          "Name": "Blacklisted words",
+          "Expression":"Error Blacklisted word",
+          "ArtifactType":"Software Requirement",
+          "Blacklist":"should, must, almost, could, may, circa, rather, simple, enough, slight, good, common, any, hardly, small, easy, sometimes, mostly , often, very, fast, already, beautiful, different, much, numerous",
+          "Type":"contains"
+        }
+      }, {
+        "Rule": {
+          "Name": "Whitelist words",
+          "Expression":"Whitelisted word missing",
+          "ArtifactType":"Software Requirement",
+          "Whitelist":"shall",
+          "Type":"contains"
+        }
+      },*/
+      {
+        "Rule": {
+          "Name": "Blacklisted words",
+          "Expression":"The following words should not be a part of the requirements",
+          "ArtifactType":"Customer Requirement",
+          "Blacklist":"should",
+          "Type":"contains"
+        }
+      }
+    ]
+  };
