@@ -1,0 +1,582 @@
+/* RM Extensions: Using Java Script to extend the functionalities using the Dashboards/Widgets */
+/*
+The MIT License (MIT)
+
+Copyright (c) 2013-present, Yuxi (Evan) You
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
+/* Function created for displaying the results*/
+
+//Needed for running tests
+var mylib = {};
+
+
+(function () {
+	var workItemStatus = []; // Release Workitem Id and URL
+	var comLength = 0; // completed link status length
+	var updateErr = false; // if error during update
+	var list = []; // list of unique requirements
+	var selection = []; //selected artifact list
+	var main; // vue instance
+	var attrNotPresent = false;
+	var notLogged = false;
+	var artifactTypeValue = null;
+	var attrName = 'Priority';//'https://rb-alm-23-p.de.bosch.com/dng/attr/priority';
+	var WiPerLink = null;
+	var moduleRef;
+	var rowssglobal, originalNoOFArtifacts = 0, noOfArtifacts = 0, countArt = 0;
+	var issuesFlag=false;
+	// var allPriorities = [];
+	// var prioEnum = {
+	// 	" ": -1, "low": 0, "normal": 1, "medium": 1, "high": 2, "kpi": 3
+	// }
+	var hasAttributePromise;
+	var containsPromise;
+	var linkTypeNamespace = "http://jazz.net/ns/dm/linktypes#";
+
+
+	var fetchArtifactDetails = function () {
+		main.appendedMsg = '';
+
+		// Loop multiple selected artifacts
+		for (i = 0; i < selection.length; i++) {
+			var artifact = selection[i];
+			fetchArtifacts(artifact);
+		}
+	};
+
+	/*check each artifact against all set rules*/
+	var ruleTest = function (/*RM.Artifact*/artifact) {
+		main.totalLength++;
+		RuleEngine.RuleConfigurations.forEach(function (rule) {
+			console.log(rule)
+			switch (rule.Rule.Type) {
+				case "has_Attribute":
+					has_Attribute(artifact, rule);
+					break;
+				case "contains":
+					contains(artifact, rule);
+					break;
+			}
+		})
+
+		Promise.all([hasAttributePromise, containsPromise]).then(values => {
+			console.log(values);
+			console.log(main.contentList)
+			if (issuesFlag){
+				main.updatedLength++;
+			}
+			main.loading = false;
+			main.displayInfo = true;
+			main.showInfo = true;
+			issuesFlag=false;
+		})
+
+		/*		
+				RM.Data.getLinkedArtifacts(artifact.ref, ['Satisfies', 'Link From', 'Satisfied By Architecture Element'], function (linksResult) {
+					comLength++;
+					var isReturn = false; // if return/stop due to any error
+					if (linksResult.code !== RM.OperationResult.OPERATION_OK) {
+						isReturn = true;
+					}
+					var externalLinks = linksResult.data.externalLinks;
+					var artifactLinks = linksResult.data.artifactLinks;
+					// Skip remaining logic of method if the artifact has no links.
+					if (externalLinks.length === 0 && artifactLinks.length === 0) {
+						console.info('no linked artifacts');
+						isReturn = true;
+					}
+		
+					if (!isReturn && !main.authRequired) {
+						var priorityTargetArtifacts = artifactLinks.length !== 0 ? artifactLinks[0].targets : [];
+						var priorityTargetArchitecture = externalLinks.length !== 0 ? externalLinks[0].targets : [];
+		
+						RM.Data.getValueRange(artifact.ref, ['Priority'], function (result) {
+							if (result.code === RM.OperationResult.OPERATION_OK) {
+								//get all the value for priority attribute for the current PA using the selected artifact as reference
+								allPriorities = result.data[0].possibleValues;
+								var prio;
+								var maxPrio;
+								var associatedPriorities = [];
+								if (priorityTargetArtifacts || priorityTargetArchitecture) {
+									if (priorityTargetArchitecture) {
+										var linkedArtifacts = getArchitectureLinkedArtifacts(priorityTargetArchitecture);
+										priorityTargetArtifacts = priorityTargetArtifacts.concat(linkedArtifacts);
+									}
+									for (i = 0; i < priorityTargetArtifacts.length; i++) {
+										var artifactLink = priorityTargetArtifacts[i];
+		
+										RM.Data.getAttributes(artifactLink, ['Priority'], function (result) {
+											if (result.code !== RM.OperationResult.OPERATION_OK) {
+												handleError("not able to fetch priority for artifact " + artifactLink);
+												return;
+											}
+											// assumption : all the links are inside the same PA.
+											//if the artifacts are link to another PA the priority values might be different and the logic would fail	
+											promiseFunction = new Promise((resolve, reject) => {
+												var priority = result.data[0].values['Priority'] == null ? " " : result.data[0].values['Priority'].toLowerCase();
+												associatedPriorities.push(priority);
+												resolve(associatedPriorities);
+											});
+											promiseFunction
+												.then(associatedPriorities => {
+													if (associatedPriorities.length == priorityTargetArtifacts.length) {
+														maxPrio = associatedPriorities.reduce(function (a, b) {
+															return prioEnum[a] > prioEnum[b] ? a : b;
+														});
+		
+														if (maxPrio) {
+															allPriorities.forEach(function (PAPriority) {
+																if (PAPriority.toLowerCase() === maxPrio) {
+																	maxPrio = PAPriority;
+																}
+															})
+															main.updatedLength++;
+															setPriority(artifact, maxPrio);
+														}
+		
+													}
+		
+												})
+												.catch(err => {
+													console.log(err)
+													handleError(err)
+												})
+										});
+									}
+								}
+		
+							} else {
+								handleError("not able to retrieve priority enumeration values");
+							}
+						})
+					}
+		
+				});*/
+	};
+
+	function has_Attribute(artifact, rule) {
+		var attributes = rule.Rule.MandatoryAttributes.split(',');
+		for(var i=0; i<attributes.length; i++){
+			attributes[i]=attributes[i].trim();
+		}
+		//attributes.push(RM.Data.Attributes.ARTIFACT_TYPE),
+		hasAttributePromise = new Promise((resolve, reject) => {
+			RM.Data.getAttributes(artifact.ref, attributes, function (result) {
+				if (result.code !== RM.OperationResult.OPERATION_OK) {
+					handleError("failed to fetch attributes for selected artifact please contact PA admin:: " + artifact);
+				} else {
+					//attributes.splice(-1,1)
+					var attributeValues = result.data[0].values;
+					if (artifact.values[RM.Data.Attributes.ARTIFACT_TYPE].name === rule.Rule.ArtifactType) {
+						//check for availability and the value of the attribute
+						attributes.forEach(function (attribute) {
+							if (attributeValues[attribute] === undefined|| attributeValues[attribute] === null || attributeValues[attribute].trim().length == 0) {
+								var content = new RequirementResult()
+								content.artifact = artifact;
+								content.rule = rule.Rule;
+								main.contentList.push(content);
+								console.log(rule.Rule.Expresion);
+								//to check the total number of artifacts with issues
+								issuesFlag=true
+							}
+						})
+					}
+				}
+				resolve();
+			})
+		});
+	}
+
+
+	function contains(artifact, rule) {
+		var blacklist = rule.Rule.Blacklist;
+		var whitelist = rule.Rule.Whitelist;
+
+		if (blacklist) {
+			var blackListWords = blacklist.split(',');
+		}
+		if (whitelist) {
+			var whiteListWords = whitelist.split(',');
+		}
+		containsPromise = new Promise((resolve, reject) => {
+			if (artifact.values[RM.Data.Attributes.ARTIFACT_TYPE].name === rule.Rule.ArtifactType) {
+				RM.Data.getAttributes(artifact.ref, [RM.Data.Attributes.PRIMARY_TEXT, RM.Data.Attributes.ARTIFACT_TYPE], function (result) {
+					if (result.code !== RM.OperationResult.OPERATION_OK) {
+						handleError("failed to fetch attributes for selected artifact please contact PA admin:: " + artifact);
+					} else {
+						var primaryText = result.data[0].values[RM.Data.Attributes.PRIMARY_TEXT];
+
+						if (blackListWords) {
+							for (var i = 0; i < blackListWords.length; i++) {
+								if (primaryText.indexOf(blackListWords[i]) !== -1) {
+									var content = new RequirementResult(artifact, rule.Rule);
+									main.contentList.push(content);
+									issuesFlag=true
+								}
+							}
+						}
+						if (whiteListWords) {
+							for (var i = 0; i < whiteListWords.length; i++) {
+								if (primaryText.indexOf(whiteListWords[i]) === -1) {
+									var content = new RequirementResult(artifact, rule.Rule);
+									main.contentList.push(content);
+									issuesFlag=true;
+								}
+							}
+						}
+					}
+					resolve();
+				})
+			}
+		});
+	}
+
+	/* common error handler */
+	function handleError(message) {
+		main.errorMessage = message;
+		console.log("error :: " + message);
+	}
+
+	var setPriority = function (artifact, maxPrio) {
+		if (maxPrio != " ") {
+			RM.Data.getAttributes(artifact.ref, ['Priority', RM.Data.Attributes.IDENTIFIER], function (result) {
+				result.data[0].values['Priority'] = maxPrio;
+				RM.Data.setAttributes(result.data[0], function (item) {
+					if (item.code !== RM.OperationResult.OPERATION_OK) {
+						handleError("Not able to set priority for :: " + artifact);
+					} else {
+						main.prioList.push(result);
+						if (comLength == main.totalLength) {
+							if (main.authRequired) {
+								clearAll();
+								main.errorMessage = 'User not logged into linked server.Please login and refresh to try again';
+							}
+							else {
+								// print the analysed and synchronization details.
+								main.displayInfo = true;
+								if (comLength > 0 && main.infoMessage == '') {
+									main.infoMessage = 'The Priority Attribute is updated with latest';
+								}
+							}
+							main.loading = false;
+							main.showInfo = true;
+						}
+					}
+				})
+			})
+		} else {
+			main.loading = false;
+			main.showInfo = true;
+		}
+	}
+
+	/*Fetch artifact details including links using artifact reference*/
+	var fetchArtifacts = function (/*RM.Artifact*/artifact) {
+		var message = null;
+		var format = getFormat(artifact.format);
+		//if an artifact of type text fetch the link    
+		if (format !== 'Module' && format !== 'Collection') {
+			//ruleTest(artifact);
+			RM.Data.getAttributes(artifact, [RM.Data.Attributes.IDENTIFIER, attrName, RM.Data.Attributes.NAME, RM.Data.Attributes.ARTIFACT_TYPE], function (result) {
+				artifactTypeValue = result.data[0].values[RM.Data.Attributes.ARTIFACT_TYPE];
+				if (result.code !== RM.OperationResult.OPERATION_OK) {
+					return;
+				} else {
+					/*if (result.data[0].values[attrName] === undefined) {
+						if (main.appendedMsg.length > 0) {
+							if (main.appendedMsg.indexOf(artifactTypeValue.name) == -1) {
+
+								main.appendedMsg = main.appendedMsg + "," + artifactTypeValue.name;
+							}
+						}
+						else {
+							main.appendedMsg = main.appendedMsg + artifactTypeValue.name;
+						}
+						main.loading = false;
+						return;
+					}*/
+				}
+				var data = result.data[0];
+				ruleTest(data);
+			});
+		}
+		else { // if module or collection fetch the internal artifacts
+			RM.Data.getContentsAttributes(artifact, [RM.Data.Attributes.IDENTIFIER, attrName, RM.Data.Attributes.NAME, RM.Data.Attributes.ARTIFACT_TYPE], function (result) {
+				if (result.code !== RM.OperationResult.OPERATION_OK) {
+					return;
+				}
+				result.data.forEach(function (item) {
+					var itemformat = getFormat(item.ref.format);
+					if (itemformat !== 'Module' && itemformat !== 'Collection') {
+						if (item.values[attrName] === undefined) {
+							artifactTypeValue = item.values[RM.Data.Attributes.ARTIFACT_TYPE];
+							if (main.appendedMsg.length > 0) {
+								if (main.appendedMsg.indexOf(artifactTypeValue.name) == -1) {
+									main.appendedMsg = main.appendedMsg + "," + artifactTypeValue.name;
+								}
+							}
+							else {
+								main.appendedMsg = main.appendedMsg + artifactTypeValue.name;
+							}
+							main.loading = false;
+						} else {
+							ruleTest(item);
+						}
+					}
+					else {
+						fetchArtifacts(item.ref);
+					}
+				});
+			});
+		}
+	}
+
+
+	var getArchitectureLinkedArtifacts = function (architectureLinkList) {
+
+		var output = [];
+		for (i = 0; i < architectureLinkList.length; i++) {
+			var xhttp = new XMLHttpRequest();
+			xhttp.onreadystatechange = function () {
+				if (this.readyState == 4 && this.status == 200) {
+					if (xhttp.getResponseHeader('X-com-ibm-team-repository-web-auth-msg') != null && xhttp.getResponseHeader('X-com-ibm-team-repository-web-auth-msg') == 'authrequired') {
+						output = [];
+					}
+					else {
+						var data = this.responseXML;
+						var namespaceReference = fetchLinkTypeReference(data);
+						var tagReference = namespaceReference.split(":")[1];
+						var tag = tagReference + ":derives";
+						artifactLinkList = data.getElementsByTagName(tag);
+						for (j = 0; j < artifactLinkList.length; j++) {
+							var val = artifactLinkList[j].getAttribute("rdf:resource");
+							output.push(new RM.ArtifactRef(val));
+						}
+					}
+				}
+			}
+			xhttp.open("GET", architectureLinkList[i], false);
+			xhttp.setRequestHeader("Content-type", "application/rdf+xml;charset=UTF-8");
+			xhttp.setRequestHeader("Accept", "application/rdf+xml");
+			xhttp.setRequestHeader('Cache-Control', 'no-cache');
+			xhttp.send();
+		}
+		return output
+	}
+
+	var fetchLinkTypeReference = function (data) {
+		var head = data.getElementsByTagName("rdf:RDF");
+		var namespaces = head[0].attributes;
+		for (i = 0; i < namespaces.length; i++) {
+			if (namespaces[i].value === linkTypeNamespace) {
+				return namespaces[i].name;
+			}
+		}
+		console.log("cannot find link types in the response, the architectural links would not be considered.")
+
+	}
+
+	/*Gets the name of the format from the complete format string*/
+	var getFormat = function (/*String*/ format) {
+		return format.slice(format.lastIndexOf('#') + 1, format.length);
+	};
+
+	/*Clears all the data contents*/
+	var clearAll = function () {
+		main.infoMessage = '';
+		main.errorMessage = '';
+		main.displayInfo = false;
+		main.totalLength = 0;
+		main.syncLength = 0;
+		main.linkList = [];
+		main.updatedLength = 0;
+		main.updateList = [];
+		main.selectedAll = false;
+		comLength = 0;
+		workItemStatus = [];
+		list = [];
+		attrNotPresent = false;
+		main.authRequired = false;
+		main.appendedMsg = '';
+		main.showTable = false;
+		main.showInfo = false;
+		main.contentList = [];
+	};
+
+	/*Clear update related data*/
+	var clearUpdate = function () {
+		comLength = 0;
+		updateErr = false;
+	};
+
+
+	function fetchArtRef(rows) {
+		rows.forEach(function (row) {
+			ruleTest(row);
+		});
+
+	}
+
+
+	function fetchModuleRef(ref) {
+		var attributesToFetch = [
+			RM.Data.Attributes.NAME,
+			RM.Data.Attributes.IDENTIFIER,
+			RM.Data.Attributes.IS_HEADING,
+			RM.Data.Attributes.SECTION_NUMBER,
+			RM.Data.Attributes.DEPTH,
+			RM.Data.Attributes.PRIMARY_TEXT,
+			RM.Data.Attributes.ARTIFACT_TYPE,
+			RM.Data.Attributes.DESCRIPTION
+		];
+
+
+		RM.Data.getContentsStructure(ref, attributesToFetch, function (opResult) {
+
+			if (opResult.code === RM.OperationResult.OPERATION_OK) {
+				//this is an Array of RM.StructureNode objects.
+				var rows = opResult.data;
+				rowssglobal = rows;
+				noOfArtifacts = rows.length;
+				originalNoOFArtifacts = noOfArtifacts;
+				fetchArtRef(rowssglobal);
+			} else {
+				main.errorMessage = 'Unable to fetch Module Details!';
+
+			}
+		});
+	}
+
+
+	//Needed for running tests
+	//mylib = { fetchLinks: fetchLinks, updateStatus: updateStatus, clearAll: clearAll, getFormat: getFormat, fetchArtifacts: fetchArtifacts, clearUpdate: clearUpdate, getWorkitemStatus: getWorkitemStatus, fetchArtifactDetails: fetchArtifactDetails, comLength: comLength, updateErr: updateErr, workItemStatus: workItemStatus, list: list, main: main, selection: selection, attrNotPresent: attrNotPresent };
+
+	/* Main Operating Function */
+	window.onload = function () {
+		main = new Vue({
+			el: '#attri_sync',
+			data: {
+				infoMessage: '',
+				errorMessage: '',
+				displayInfo: false,
+				totalLength: 0,
+				syncLength: 0,
+				updatedLength: 0,
+				linkList: [],
+				updateList: [],
+				selectedAll: false,
+				authRequired: false,
+				loading: false,
+				appendedMsg: '',
+				showTable: false,
+				showInfo: false,
+				contentList: [],
+
+			},
+			updated: function () {
+				gadgets.window.adjustHeight();
+			},
+			methods: {
+				fetchDetails: function () {
+					clearAll();
+					var i;
+					this.loading = true;
+					if (selection.length > 0) {
+						var x = document.getElementById("myDIV");
+						x.style.display = 'none';
+						fetchArtifactDetails();
+					} else {
+						var x = document.getElementById("myDIV");
+						x.style.display = 'none';
+						fetchModuleRef(moduleRef);
+					}
+				},
+				selectAll: function () {
+					this.updateList = [];
+
+					if (this.selectedAll) {
+						for (link in this.linkList) {
+							this.updateList.push(this.linkList[link]);
+						}
+					}
+				},
+				select: function () {
+					if (this.updateList.length == this.linkList.length) {
+						this.selectedAll = true;
+					}
+					else {
+						this.selectedAll = false;
+					}
+				},
+				updateStatus: function () {
+					clearUpdate();
+					this.updateList.forEach(function (item) {
+						updateStatus(item);
+					});
+				},
+				showPreview: function (val) {
+					getPreview(val);
+				},
+				clearPreview: function (val) {
+					window.setTimeout(function () {
+						console.log('display none');
+						var pframe = document.getElementById(val);
+						pframe.style.display = 'none';
+						//gadgets.window.adjustHeight();
+					}, 500);
+				},
+				toggleInfo: function () {
+					if (this.showTable) {
+						this.showTable = false;
+					} else
+						this.showTable = true;
+				}
+			}
+		});
+
+		RM.Event.subscribe(RM.Event.ARTIFACT_SELECTED, function (selected) {
+			selection = selected;
+		});
+
+		RM.Event.subscribe(RM.Event.ARTIFACT_OPENED, function (ref) {
+			// this function is invoked whenever the user opens an artifact
+			// the parameter "ref" is an RM.ArtifactRef and is a reference
+			// to the artifact that was just opened.  
+			RM.Data.getAttributes(ref, [RM.Data.Attributes.FORMAT, RM.Data.Attributes.ARTIFACT_TYPE, RM.Data.Attributes.NAME], function (opResult) {
+				if (opResult.code === RM.OperationResult.OPERATION_OK) {
+					var attrs = opResult.data[0];
+					if (attrs.values[RM.Data.Attributes.FORMAT] === RM.Data.Formats.MODULE) {
+						moduleRef = ref;
+					} else {
+						// it's not a module so empty the explorer.
+						gadgets.window.adjustHeight(0);
+					}
+				}
+			});
+		});
+
+	};
+	// export the namespace object
+	if (typeof module !== 'undefined' && module.exports) {
+		module.exports = mylib;
+	}
+})();
