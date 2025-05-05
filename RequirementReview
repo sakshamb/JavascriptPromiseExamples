@@ -39,7 +39,7 @@ var mylib = {};
 	var attrNotPresent = false;
 	var notLogged = false;
 	var artifactTypeValue = null;
-	var attrName = 'Priority';//'https://rb-alm-23-p.de.bosch.com/dng/attr/priority';
+	var attrName = 'Priority';//;
 	var WiPerLink = null;
 	var moduleRef;
 	var rowssglobal, originalNoOFArtifacts = 0, noOfArtifacts = 0, countArt = 0;
